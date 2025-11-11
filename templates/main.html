@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>API Control Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      text-align: center;
+      min-width: 400px;
+    }
+
+    h2 {
+      color: #333;
+      margin-bottom: 30px;
+    }
+
+    .switch-container {
+      margin: 30px 0;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 60px;
+      height: 34px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 34px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 26px;
+      width: 26px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+
+    input:checked+.slider {
+      background-color: #667eea;
+    }
+
+    input:checked+.slider:before {
+      transform: translateX(26px);
+    }
+
+    .status {
+      margin: 20px 0;
+      padding: 15px;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+
+    .status.on {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status.off {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      box-sizing: border-box;
+      resize: vertical;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      margin: 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+
+    .api-info {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h2>API Control Panel</h2>
+
+    <div class="switch-container">
+      <label class="switch">
+        <input type="checkbox" id="apiSwitch" {{ 'checked' if status == 'on' else '' }}>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="status {{ status }}">
+      Status: {{ status.upper() }}
+    </div>
+
+    <div>
+      <label for="message">API Message:</label>
+      <textarea id="message" rows="3">{{ message }}</textarea>
+      <button class="btn btn-primary" onclick="updateMessage()">Update Message</button>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button class="btn btn-secondary" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="api-info">
+      <strong>API Endpoint:</strong><br>
+      <code>GET /api/status</code><br><br>
+      <strong>Response format:</strong><br>
+      <code>{"status": "on/off", "message": "..."}</code>
+    </div>
+  </div>
+
+  <script>
+    const apiSwitch = document.getElementById('apiSwitch');
+
+    apiSwitch.addEventListener('change', async () => {
+      const status = apiSwitch.checked ? 'on' : 'off';
+      await fetch('/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      location.reload();
+    });
+
+    async function updateMessage() {
+      const message = document.getElementById('message').value;
+      await fetch('/update-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      alert('Message updated!');
+    }
+
+    function logout() {
+      fetch('/logout', { method: 'POST' })
+        .then(() => window.location.href = '/');
+    }
+  </script>
+</body>
+
+</html>
