@@ -5,16 +5,25 @@ import secrets
 from pathlib import Path
 from database import Database, get_database
 from contextlib import asynccontextmanager
+import os
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    await Database.connect_db()
-    yield
-    # Shutdown
-    await Database.close_db()
+# Check if running on Vercel
+IS_VERCEL = os.getenv('VERCEL') == '1'
 
-app = FastAPI(lifespan=lifespan)
+if not IS_VERCEL:
+    # Use lifespan for local development
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        # Startup
+        await Database.connect_db()
+        yield
+        # Shutdown
+        await Database.close_db()
+    
+    app = FastAPI(lifespan=lifespan)
+else:
+    # No lifespan for serverless - connection managed per request
+    app = FastAPI()
 
 # Setup templates directory
 templates = Jinja2Templates(directory="templates")
