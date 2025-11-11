@@ -3,18 +3,36 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import secrets
 from pathlib import Path
+from database import Database, get_database
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await Database.connect_db()
+    yield
+    # Shutdown
+    await Database.close_db()
+
+app = FastAPI(lifespan=lifespan)
 
 # Setup templates directory
 templates = Jinja2Templates(directory="templates")
 
-# Simple in-memory storage
-CREDENTIALS = {"admin": "password"}  # Change these!
+# Simple in-memory storage for sessions (you can move this to MongoDB too if needed)
 sessions = {}
-api_state = {"status": "off", "message": "API is currently disabled"}
 
-def verify_session(session_id: str = Cookie(None)):
+async def get_credentials_collection():
+    """Get credentials collection from MongoDB"""
+    db = await get_database()
+    return db.credentials
+
+async def get_api_state_collection():
+    """Get API state collection from MongoDB"""
+    db = await get_database()
+    return db.api_state
+
+async def verify_session(session_id: str = Cookie(None)):
     if not session_id or session_id not in sessions:
         raise HTTPException(status_code=401, detail="Unauthorized")
     return session_id
@@ -25,7 +43,10 @@ async def login_page(request: Request):
 
 @app.post("/login")
 async def login(request: Request, username: str = Form(...), password: str = Form(...)):
-    if username in CREDENTIALS and CREDENTIALS[username] == password:
+    credentials_col = await get_credentials_collection()
+    user = await credentials_col.find_one({"username": username})
+    
+    if user and user.get("password") == password:
         session_id = secrets.token_urlsafe(32)
         sessions[session_id] = username
         response = RedirectResponse(url="/main", status_code=303)
@@ -38,25 +59,46 @@ async def login(request: Request, username: str = Form(...), password: str = For
 
 @app.get("/main", response_class=HTMLResponse)
 async def main_page(request: Request, session_id: str = Cookie(None)):
-    verify_session(session_id)
+    await verify_session(session_id)
+    
+    api_state_col = await get_api_state_collection()
+    state = await api_state_col.find_one({"_id": "current_state"})
+    
+    if not state:
+        # Initialize default state if not exists
+        state = {"_id": "current_state", "status": "off", "message": "API is currently disabled"}
+        await api_state_col.insert_one(state)
+    
     return templates.TemplateResponse("main.html", {
         "request": request,
-        "status": api_state["status"],
-        "message": api_state["message"]
+        "status": state["status"],
+        "message": state["message"]
     })
 
 @app.post("/toggle")
 async def toggle_status(request: Request, session_id: str = Cookie(None)):
-    verify_session(session_id)
+    await verify_session(session_id)
     data = await request.json()
-    api_state["status"] = data["status"]
+    
+    api_state_col = await get_api_state_collection()
+    await api_state_col.update_one(
+        {"_id": "current_state"},
+        {"$set": {"status": data["status"]}},
+        upsert=True
+    )
     return {"success": True}
 
 @app.post("/update-message")
 async def update_message(request: Request, session_id: str = Cookie(None)):
-    verify_session(session_id)
+    await verify_session(session_id)
     data = await request.json()
-    api_state["message"] = data["message"]
+    
+    api_state_col = await get_api_state_collection()
+    await api_state_col.update_one(
+        {"_id": "current_state"},
+        {"$set": {"message": data["message"]}},
+        upsert=True
+    )
     return {"success": True}
 
 @app.post("/logout")
@@ -69,10 +111,19 @@ async def logout(session_id: str = Cookie(None)):
 
 @app.get("/api/status")
 async def api_status():
+    api_state_col = await get_api_state_collection()
+    state = await api_state_col.find_one({"_id": "current_state"})
+    
+    if not state:
+        # Return default state if not exists
+        return {
+            "status": "off",
+            "message": "API is currently disabled"
+        }
     
     return {
-        "status": api_state["status"],
-        "message": api_state["message"]
+        "status": state["status"],
+        "message": state["message"]
     }
 
 if __name__ == "__main__":
