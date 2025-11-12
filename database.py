@@ -1,10 +1,11 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional
 import os
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Only load .env in local development (not on Vercel)
+if os.getenv('VERCEL') != '1' and os.getenv('VERCEL_ENV') is None:
+    from dotenv import load_dotenv
+    load_dotenv()
 
 class Database:
     client: Optional[AsyncIOMotorClient] = None
