@@ -25,8 +25,9 @@ else:
     # No lifespan for serverless - connection managed per request
     app = FastAPI()
 
-# Setup templates directory
-templates = Jinja2Templates(directory="templates")
+# Setup templates directory - use absolute path for Vercel
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # Simple in-memory storage for sessions (you can move this to MongoDB too if needed)
 sessions = {}
@@ -135,6 +136,3 @@ async def api_status():
         "message": state["message"]
     }
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
