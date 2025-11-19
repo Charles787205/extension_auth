@@ -23,7 +23,35 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # In-memory fallback storage
 CREDENTIALS = {"admin": "password"}
 sessions = {}
-api_state = {"status": "off", "message": "API is currently disabled"}
+# Don't initialize api_state here - always fetch from MongoDB first
+api_state = None
+
+async def get_or_init_api_state():
+    """Get API state from MongoDB or initialize in-memory"""
+    global api_state
+    
+    if USE_MONGODB:
+        try:
+            api_state_col = await get_api_state_collection()
+            if api_state_col is not None:
+                state = await api_state_col.find_one({"_id": "current_state"})
+                if state:
+                    return state
+                # If no state in MongoDB, initialize it
+                default_state = {
+                    "_id": "current_state",
+                    "status": "off",
+                    "message": "API is currently disabled"
+                }
+                await api_state_col.insert_one(default_state)
+                return default_state
+        except Exception as e:
+            print(f"MongoDB error: {e}")
+    
+    # Fallback to in-memory
+    if api_state is None:
+        api_state = {"status": "off", "message": "API is currently disabled"}
+    return api_state
 
 async def get_credentials_collection():
     """Get credentials collection from MongoDB"""
@@ -82,26 +110,13 @@ async def login(request: Request, username: str = Form(...), password: str = For
 async def main_page(request: Request, session_id: str = Cookie(None)):
     verify_session(session_id)
     
-    # Try MongoDB first
-    if USE_MONGODB:
-        try:
-            api_state_col = await get_api_state_collection()
-            if api_state_col is not None:
-                state = await api_state_col.find_one({"_id": "current_state"})
-                if state:
-                    return templates.TemplateResponse("main.html", {
-                        "request": request,
-                        "status": state["status"],
-                        "message": state["message"]
-                    })
-        except Exception as e:
-            print(f"MongoDB error, using in-memory: {e}")
+    # Always get fresh state from MongoDB (or in-memory fallback)
+    state = await get_or_init_api_state()
     
-    # Fallback to in-memory
     return templates.TemplateResponse("main.html", {
         "request": request,
-        "status": api_state["status"],
-        "message": api_state["message"]
+        "status": state["status"],
+        "message": state["message"]
     })
 
 @app.post("/toggle")
@@ -160,24 +175,12 @@ async def logout(session_id: str = Cookie(None)):
 
 @app.get("/api/status")
 async def api_status():
-    # Try MongoDB first
-    if USE_MONGODB:
-        try:
-            api_state_col = await get_api_state_collection()
-            if api_state_col is not None:
-                state = await api_state_col.find_one({"_id": "current_state"})
-                if state:
-                    return {
-                        "status": state["status"],
-                        "message": state["message"]
-                    }
-        except Exception as e:
-            print(f"MongoDB error, using in-memory: {e}")
+    # Always get fresh state from MongoDB (or in-memory fallback)
+    state = await get_or_init_api_state()
     
-    # Fallback to in-memory
     return {
-        "status": api_state["status"],
-        "message": api_state["message"]
+        "status": state["status"],
+        "message": state["message"]
     }
 
 if __name__ == "__main__":
