@@ -157,10 +157,23 @@
         <input type="checkbox" id="apiSwitch" {{ 'checked' if status == 'on' else '' }}>
         <span class="slider"></span>
       </label>
+      <div>API Status</div>
     </div>
 
     <div class="status {{ status }}">
       Status: {{ status.upper() }}
+    </div>
+
+    <div class="switch-container">
+      <label class="switch">
+        <input type="checkbox" id="displayImagesSwitch" {{ 'checked' if display_images == 'on' else '' }}>
+        <span class="slider"></span>
+      </label>
+      <div>Display Images</div>
+    </div>
+
+    <div class="status {{ display_images }}">
+      Display Images: {{ display_images.upper() }}
     </div>
 
     <div>
@@ -177,12 +190,13 @@
       <strong>API Endpoint:</strong><br>
       <code>GET /api/status</code><br><br>
       <strong>Response format:</strong><br>
-      <code>{"status": "on/off", "message": "..."}</code>
+      <code>{"status": "on/off", "message": "...", "display_images": "on/off"}</code>
     </div>
   </div>
 
   <script>
     const apiSwitch = document.getElementById('apiSwitch');
+    const displayImagesSwitch = document.getElementById('displayImagesSwitch');
 
     apiSwitch.addEventListener('change', async () => {
       const status = apiSwitch.checked ? 'on' : 'off';
@@ -190,6 +204,16 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
+      });
+      location.reload();
+    });
+
+    displayImagesSwitch.addEventListener('change', async () => {
+      const display_images = displayImagesSwitch.checked ? 'on' : 'off';
+      await fetch('/toggle-display-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_images })
       });
       location.reload();
     });

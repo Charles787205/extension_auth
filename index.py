@@ -41,7 +41,8 @@ async def get_or_init_api_state():
                 default_state = {
                     "_id": "current_state",
                     "status": "off",
-                    "message": "API is currently disabled"
+                    "message": "API is currently disabled",
+                    "display_images": "off"
                 }
                 await api_state_col.insert_one(default_state)
                 return default_state
@@ -50,7 +51,7 @@ async def get_or_init_api_state():
     
     # Fallback to in-memory
     if api_state is None:
-        api_state = {"status": "off", "message": "API is currently disabled"}
+        api_state = {"status": "off", "message": "API is currently disabled", "display_images": "off"}
     return api_state
 
 async def get_credentials_collection():
@@ -116,7 +117,8 @@ async def main_page(request: Request, session_id: str = Cookie(None)):
     return templates.TemplateResponse("main.html", {
         "request": request,
         "status": state["status"],
-        "message": state["message"]
+        "message": state["message"],
+        "display_images": state.get("display_images", "off")
     })
 
 @app.post("/toggle")
@@ -165,6 +167,29 @@ async def update_message(request: Request, session_id: str = Cookie(None)):
     api_state["message"] = data["message"]
     return {"success": True}
 
+@app.post("/toggle-display-images")
+async def toggle_display_images(request: Request, session_id: str = Cookie(None)):
+    verify_session(session_id)
+    data = await request.json()
+    
+    # Try MongoDB first
+    if USE_MONGODB:
+        try:
+            api_state_col = await get_api_state_collection()
+            if api_state_col is not None:
+                await api_state_col.update_one(
+                    {"_id": "current_state"},
+                    {"$set": {"display_images": data["display_images"]}},
+                    upsert=True
+                )
+                return {"success": True}
+        except Exception as e:
+            print(f"MongoDB error, using in-memory: {e}")
+    
+    # Fallback to in-memory
+    api_state["display_images"] = data["display_images"]
+    return {"success": True}
+
 @app.post("/logout")
 async def logout(session_id: str = Cookie(None)):
     if session_id in sessions:
@@ -180,7 +205,8 @@ async def api_status():
     
     return {
         "status": state["status"],
-        "message": state["message"]
+        "message": state["message"],
+        "display_images": state.get("display_images", "off")
     }
 
 if __name__ == "__main__":
